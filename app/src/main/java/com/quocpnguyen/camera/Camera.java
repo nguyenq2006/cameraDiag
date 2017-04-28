@@ -11,6 +11,7 @@ import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
 import android.media.Image;
@@ -35,7 +36,7 @@ public class Camera extends Activity {
     final int IMAGE_HEIGHT = 480;
     private CameraManager cameraManager;
     private ImageReader imageReader;
-    private Handler backgroundHandler;
+//    private Handler backgroundHandler;
     private HandlerThread backgroundThread;
     private String cameraId;
     private CameraDevice cameraDevice;
@@ -62,6 +63,15 @@ public class Camera extends Activity {
         closeCamera();
         stopBackgroundThread();
         super.onPause();
+    }
+
+    @Override
+    public void onDestroy(){
+        closeCamera();
+        bitmapImage.recycle();
+        stopBackgroundThread();
+        cameraManager = null;
+        super.onDestroy();
     }
 
     private CameraCaptureSession captureSession;
@@ -126,7 +136,7 @@ public class Camera extends Activity {
             this.cameraId = cameraManager.getCameraIdList()[0];
             //set up camera output
             imageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT, ImageFormat.JPEG, 1);
-            imageReader.setOnImageAvailableListener(mOnImageAvailableListener, backgroundHandler);
+            imageReader.setOnImageAvailableListener(mOnImageAvailableListener, null);
 
 
         } catch (CameraAccessException | NullPointerException e) {
@@ -141,7 +151,7 @@ public class Camera extends Activity {
     private void startBackgroundThread() {
         this.backgroundThread = new HandlerThread("CameraBackground");
         this.backgroundThread.start();
-        this.backgroundHandler = new Handler(this.backgroundThread.getLooper());
+//        this.backgroundHandler = new Handler(this.backgroundThread.getLooper());
         Log.d("startBackgroundThread", "Background thread started");
     }
 
@@ -153,7 +163,7 @@ public class Camera extends Activity {
         try {
             this.backgroundThread.join();
             this.backgroundThread = null;
-            this.backgroundHandler = null;
+//            this.backgroundHandler = null;
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -182,7 +192,7 @@ public class Camera extends Activity {
         this.cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         setupCamera2();
         try {
-            cameraManager.openCamera(cameraId, cameraStateCallback, backgroundHandler);
+            cameraManager.openCamera(cameraId, cameraStateCallback, null);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -195,7 +205,8 @@ public class Camera extends Activity {
             requestBuilder.addTarget(imageReader.getSurface());
 
             // Focus
-            requestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+            requestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                    CameraMetadata.CONTROL_AF_TRIGGER_START);
 
             // Orientation
             WindowManager windowManager = getWindowManager();
@@ -204,8 +215,9 @@ public class Camera extends Activity {
 
             captureSession.capture(requestBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                 @Override
-                public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
-                    super.onCaptureStarted(session, request, timestamp, frameNumber);
+                public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
+                    super.onCaptureCompleted(session, request, result);
+                    session.close();
                 }
             }, null);
 
